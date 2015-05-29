@@ -302,7 +302,7 @@ void serialInit(uint32_t baudrate)
         availableBoxes[idx++] = BOXHEADFREE;
         availableBoxes[idx++] = BOXHEADADJ;
     }
-    if (feature(FEATURE_SERVO_TILT))
+    if (feature(FEATURE_SERVO_TILT) || feature(FEATURE_SERVO_PASSTHROUGH))
         availableBoxes[idx++] = BOXCAMSTAB;
     if (feature(FEATURE_GPS)) {
         availableBoxes[idx++] = BOXGPSHOME;

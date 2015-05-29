@@ -283,8 +283,8 @@ void mixerInit(void)
 
     // enable servos for mixes that require them. note, this shifts motor counts.
     core.useServo = mixers[mcfg.mixerConfiguration].useServo;
-    // if we want camstab/trig, that also enables servos, even if mixer doesn't
-    if (feature(FEATURE_SERVO_TILT))
+    // if we want camstab/trig or passthrough, that also enables servos, even if mixer doesn't
+    if (feature(FEATURE_SERVO_TILT) || feature(FEATURE_SERVO_PASSTHROUGH))
         core.useServo = 1;
 
     if (mcfg.mixerConfiguration == MULTITYPE_CUSTOM) {
@@ -437,7 +437,7 @@ void writeServos(void)
 
         default:
             // Two servos for SERVO_TILT, if enabled
-            if (feature(FEATURE_SERVO_TILT)) {
+            if (feature(FEATURE_SERVO_TILT) || feature(FEATURE_SERVO_PASSTHROUGH)) {
                 pwmWriteServo(0, servo[0]);
                 pwmWriteServo(1, servo[1]);
             }
@@ -564,13 +564,22 @@ void mixTable(void)
             break;
     }
 
-    // do camstab
-    if (feature(FEATURE_SERVO_TILT)) {
-        // center at fixed position, or vary either pitch or roll by RC channel
+    // center both servos first
+    if (feature(FEATURE_SERVO_TILT) || feature(FEATURE_SERVO_PASSTHROUGH)) {
         servo[0] = servoMiddle(0);
         servo[1] = servoMiddle(1);
+    }
 
+    // do servo passthrough before camera stabalization
+    if (feature(FEATURE_SERVO_PASSTHROUGH)) {
+        servo[0] = rcData[AUX3];
+        servo[1] = rcData[AUX4];
+    }
+
+    // do camstab after passthrough so it can be overridden when enabled
+    if (feature(FEATURE_SERVO_TILT)) {
         if (rcOptions[BOXCAMSTAB]) {
+            // vary either pitch or roll by RC channel
             if (cfg.gimbal_flags & GIMBAL_MIXTILT) {
                 servo[0] -= (-(int32_t)cfg.servoConf[0].rate) * angle[PITCH] / 50 - (int32_t)cfg.servoConf[1].rate * angle[ROLL] / 50;
                 servo[1] += (-(int32_t)cfg.servoConf[0].rate) * angle[PITCH] / 50 + (int32_t)cfg.servoConf[1].rate * angle[ROLL] / 50;
