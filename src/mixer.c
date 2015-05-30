@@ -283,8 +283,8 @@ void mixerInit(void)
 
     // enable servos for mixes that require them. note, this shifts motor counts.
     core.useServo = mixers[mcfg.mixerConfiguration].useServo;
-    // if we want camstab/trig, that also enables servos, even if mixer doesn't
-    if (feature(FEATURE_SERVO_TILT))
+    // if we want camstab/trig or servo mixers, that also enables servos, even if mixerConfiguration doesn't
+    if (feature(FEATURE_SERVO_TILT) || feature(FEATURE_SERVO_MIXER))
         core.useServo = 1;
 
     if (mcfg.mixerConfiguration == MULTITYPE_CUSTOM) {
@@ -380,6 +380,7 @@ void writeServos(void)
     if (!core.useServo)
         return;
 
+    // apply servos for the specific mixerConfiguration
     switch (mcfg.mixerConfiguration) {
         case MULTITYPE_BI:
             pwmWriteServo(0, servo[4]);
@@ -436,8 +437,8 @@ void writeServos(void)
             break;
 
         default:
-            // Two servos for SERVO_TILT, if enabled
-            if (feature(FEATURE_SERVO_TILT)) {
+            // otherwise, control the first two servos when SERVO_TILT or SERVO_MIXER is enabled
+            if (feature(FEATURE_SERVO_TILT) || feature(FEATURE_SERVO_MIXER)) {
                 pwmWriteServo(0, servo[0]);
                 pwmWriteServo(1, servo[1]);
             }
@@ -461,6 +462,12 @@ void writeAllMotors(int16_t mc)
     for (i = 0; i < numberMotor; i++)
         motor[i] = mc;
     writeMotors();
+}
+
+static void resetServos(void) {
+    uint8_t i;
+    for (i = 0; i < MAX_SERVOS; i++)
+        servo[i] = 0;
 }
 
 static void servoMixer(void)
@@ -491,9 +498,6 @@ static void servoMixer(void)
     input[INPUT_RC_YAW] = mcfg.midrc - rcData[YAW];
     input[INPUT_RC_THROTTLE] = mcfg.midrc - rcData[THROTTLE];
 
-    for (i = 0; i < MAX_SERVOS; i++)
-        servo[i] = 0;
-
     // mix servos according to rules
     for (i = 0; i < numberRules; i++) {
         // consider rule if no box assigned or box is active
@@ -514,14 +518,12 @@ static void servoMixer(void)
             }
 
             servo[target] += servoDirection(target, from) * constrain(((int32_t)currentOutput[i] * currentServoMixer[i].rate) / 100, min, max);
+
+            // apply servo rates to affected servos only
+            servo[target] = ((int32_t)cfg.servoConf[target].rate * servo[target]) / 100;
+            servo[target] += servoMiddle(i);
         } else
             currentOutput[i] = 0;
-    }
-
-    // servo rates
-    for (i = 0; i < MAX_SERVOS; i++) {
-        servo[i] = ((int32_t)cfg.servoConf[i].rate * servo[i]) / 100;
-        servo[i] += servoMiddle(i);
     }
 }
 
@@ -547,24 +549,18 @@ void mixTable(void)
             motor[0] = constrain(rcCommand[THROTTLE], mcfg.minthrottle, mcfg.maxthrottle);
     }
 
-    // airplane / servo mixes
-    switch (mcfg.mixerConfiguration) {
-        case MULTITYPE_CUSTOM_PLANE:
-        case MULTITYPE_FLYING_WING:
-        case MULTITYPE_AIRPLANE:
-        case MULTITYPE_BI:
-        case MULTITYPE_TRI:
-        case MULTITYPE_DUALCOPTER:
-        case MULTITYPE_SINGLECOPTER:
-            servoMixer();
-            break;
-        case MULTITYPE_GIMBAL:
-            servo[0] = (((int32_t)cfg.servoConf[0].rate * angle[PITCH]) / 50) + servoMiddle(0);
-            servo[1] = (((int32_t)cfg.servoConf[1].rate * angle[ROLL]) / 50) + servoMiddle(1);
-            break;
+    if (core.useServo == 1) {
+        // reset all servos
+        resetServos();
     }
 
-    // do camstab
+    if (mcfg.mixerConfiguration == MULTITYPE_GIMBAL) {
+        // set servo output for gimbal type
+        servo[0] = (((int32_t)cfg.servoConf[0].rate * angle[PITCH]) / 50) + servoMiddle(0);
+        servo[1] = (((int32_t)cfg.servoConf[1].rate * angle[ROLL]) / 50) + servoMiddle(1);
+    }
+
+    // set camstab servo output before applying servo mixer rules
     if (feature(FEATURE_SERVO_TILT)) {
         // center at fixed position, or vary either pitch or roll by RC channel
         servo[0] = servoMiddle(0);
@@ -579,6 +575,11 @@ void mixTable(void)
                 servo[1] += (int32_t)cfg.servoConf[1].rate * angle[ROLL]  / 50;
             }
         }
+    }
+
+    if (core.useServo == 1) {
+        // run the servo mixer if necessary
+        servoMixer();
     }
 
     // constrain servos
