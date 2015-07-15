@@ -10,7 +10,7 @@
 #include "telemetry_common.h"
 
 // Multiwii Serial Protocol 0
-#define MSP_VERSION              3
+#define MSP_VERSION              4
 #define CAP_PLATFORM_32BIT          ((uint32_t)1 << 31)
 #define CAP_BASEFLIGHT_CONFIG       ((uint32_t)1 << 30)
 #define CAP_DYNBALANCE              ((uint32_t)1 << 2)
@@ -39,6 +39,7 @@
 #define MSP_SERVO_CONF           120    //out message         Servo settings
 #define MSP_NAV_STATUS           121    //out message         Returns navigation status
 #define MSP_NAV_CONFIG           122    //out message         Returns navigation parameters
+#define MSP_FW_CONFIG            123    //out message         Returns parameters specific to Flying Wing mode
 
 #define MSP_SET_RAW_RC           200    //in message          8 rc chan
 #define MSP_SET_RAW_GPS          201    //in message          fix, numsat, lat, lon, alt, speed
@@ -55,6 +56,7 @@
 #define MSP_SET_SERVO_CONF       212    //in message          Servo settings
 #define MSP_SET_MOTOR            214    //in message          PropBalance function
 #define MSP_SET_NAV_CONFIG       215    //in message          Sets nav config parameters - write to the eeprom
+#define MSP_SET_FW_CONFIG        216    //in message          Sets parameters specific to Flying Wing mode
 
 // #define MSP_BIND                 240    //in message          no param
 
@@ -277,7 +279,7 @@ void serialInit(uint32_t baudrate)
     numTelemetryPorts++;
 
     // additional telemetry port available only if spektrum sat isn't already assigned there
-    if (hw_revision >= NAZE32_SP  && !mcfg.spektrum_sat_on_flexport) {
+    if (hw_revision == NAZE32_SP  && !mcfg.spektrum_sat_on_flexport) {
         core.flexport = uartOpen(USART3, NULL, baudrate, MODE_RXTX);
         ports[1].port = core.flexport;
         numTelemetryPorts++;
@@ -526,6 +528,44 @@ static void evaluateCommand(void)
             }
             loadCustomServoMixer();
             break;
+        case MSP_FW_CONFIG:
+            headSerialReply(38);
+            serialize8(mcfg.fw_althold_dir);
+            serialize16(cfg.fw_gps_maxcorr);
+            serialize16(cfg.fw_gps_rudder);
+            serialize16(cfg.fw_gps_maxclimb);
+            serialize16(cfg.fw_gps_maxdive);
+            serialize16(cfg.fw_climb_throttle);
+            serialize16(cfg.fw_cruise_throttle);
+            serialize16(cfg.fw_idle_throttle);
+            serialize16(cfg.fw_scaler_throttle);
+            serialize32(cfg.fw_roll_comp);
+            serialize8(cfg.fw_rth_alt);
+            // next added for future use
+            serialize32(0);
+            serialize32(0);
+            serialize32(0);
+            serialize32(0);
+            break;
+        case MSP_SET_FW_CONFIG:
+            headSerialReply(0);
+            mcfg.fw_althold_dir = read8();
+            cfg.fw_gps_maxcorr = read16();
+            cfg.fw_gps_rudder = read16();
+            cfg.fw_gps_maxclimb = read16();
+            cfg.fw_gps_maxdive = read16();
+            cfg.fw_climb_throttle = read16();
+            cfg.fw_cruise_throttle = read16();
+            cfg.fw_idle_throttle = read16();
+            cfg.fw_scaler_throttle = read16();
+            cfg.fw_roll_comp = read32();
+            cfg.fw_rth_alt = read8();
+            // next added for future use
+            read32();
+            read32();
+            read32();
+            read32();
+            break;
         case MSP_MOTOR:
             s_struct((uint8_t *)motor, 16);
             break;
@@ -767,10 +807,13 @@ static void evaluateCommand(void)
             cfg.rollPitchRate[0] = read8();
             cfg.rollPitchRate[1] = read8();
             mcfg.power_adc_channel = read8();
+            cfg.small_angle = read8();
+            mcfg.looptime = read16();
+            cfg.locked_in = read8();
             /// ???
             break;
         case MSP_CONFIG:
-            headSerialReply(1 + 4 + 1 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 1);
+            headSerialReply(1 + 4 + 1 + 2 + 2 + 2 + 2 + 2 + 2 + 2 + 1 + 1 + 2 + 1);
             serialize8(mcfg.mixerConfiguration);
             serialize32(featureMask());
             serialize8(mcfg.serialrx_type);
@@ -783,6 +826,9 @@ static void evaluateCommand(void)
             serialize8(cfg.rollPitchRate[0]);
             serialize8(cfg.rollPitchRate[1]);
             serialize8(mcfg.power_adc_channel);
+            serialize8(cfg.small_angle);
+            serialize16(mcfg.looptime);
+            serialize8(cfg.locked_in);
             /// ???
             break;
 

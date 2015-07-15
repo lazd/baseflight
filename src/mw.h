@@ -232,6 +232,7 @@ typedef struct config_t {
     uint16_t tpa_breakpoint;                // Breakpoint where TPA is activated
     int16_t mag_declination;                // Get your magnetic decliniation from here : http://magnetic-declination.com/
     int16_t angleTrim[2];                   // accelerometer trim
+    uint8_t locked_in;
 
     // sensor-related stuff
     uint8_t acc_lpf_factor;                 // Set the Low Pass Filter factor for ACC. Increasing this value would reduce ACC noise (visible in GUI), but would increase ACC lag time. Zero = no filter
@@ -280,10 +281,7 @@ typedef struct config_t {
     uint16_t nav_speed_max;                 // cm/sec
     uint16_t ap_mode;                       // Temporarily Disables GPS_HOLD_MODE to be able to make it possible to adjust the Hold-position when moving the sticks, creating a deadspan for GPS
 
-    float fw_roll_throw;
-    float fw_pitch_throw;
-    uint8_t fw_vector_trust;
-    uint8_t fw_flaperons_invert;
+    // fw-related stuff
     int16_t fw_gps_maxcorr;                    // Degrees banking Allowed by GPS.
     int16_t fw_gps_rudder;                     // Maximum Rudder
     int16_t fw_gps_maxclimb;                   // Degrees climbing . To much can stall the plane.
@@ -292,7 +290,8 @@ typedef struct config_t {
     uint16_t fw_cruise_throttle;               // Throttle to set for cruisespeed.
     uint16_t fw_idle_throttle;                 // Lowest throttleValue during Descend
     uint16_t fw_scaler_throttle;               // Adjust to Match Power/Weight ratio of your model
-    float fw_roll_comp;
+    float fw_roll_comp;                        // How much Elevator compensates Roll in GPS modes
+    uint8_t fw_rth_alt;                        // Min Altitude to keep during RTH. (Max 200m)
 
 } config_t;
 
@@ -399,7 +398,6 @@ typedef struct core_t {
     serialPort_t *gpsport;
     serialPort_t *telemport;
     serialPort_t *rcvrport;
-    uint8_t mpu6050_scale;                  // es/non-es variance between MPU6050 sensors, half my boards are mpu6000ES, need this to be dynamic. automatically set by mpu6050 driver.
     uint8_t numRCChannels;                  // number of rc channels as reported by current input driver
     bool useServo;                          // feature SERVO_TILT or wing/airplane mixers will enable this
     uint8_t numServos;                      // how many total hardware servos we have. used by mixer
